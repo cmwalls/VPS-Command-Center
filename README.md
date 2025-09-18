@@ -6,14 +6,14 @@ It’s meant to demonstrate real sysadmin/DevOps work **without secrets**.
 ## How to read this repo
 Everything under `root/` maps 1:1 to production paths:
 
-`root/`
-`var/www/... -> /var/www/...`
-`opt/... -> /opt/...`
-`etc/systemd/system/... -> /etc/systemd/system/...`
-`etc/apache2/... -> /etc/apache2/...`
-`etc/ufw/... -> /etc/ufw/...`
-`etc/wireguard/... -> /etc/wireguard/...`
-`usr/local/bin/... -> /usr/local/bin/...`
+`root/
+var/www/... -> /var/www/...
+opt/... -> /opt/...
+etc/systemd/system/... -> /etc/systemd/system/...
+etc/apache2/... -> /etc/apache2/...
+etc/ufw/... -> /etc/ufw/...
+etc/wireguard/... -> /etc/wireguard/...
+usr/local/bin/... -> /usr/local/bin/...`
 
 
 ## Components included
