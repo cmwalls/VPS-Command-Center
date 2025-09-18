@@ -62,27 +62,27 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 
 ## Repo layout
 
-`root/`
-`├─ var/`
-`│  ├─ www/                         # dashboard HTML/CSS (sanitized)`
-`│  ├─ log/                         # (optional) redacted samples`
-`│  └─ spool/                       # present for structure`
-`├─ opt/`
-`│  └─ vpsdash/                     # FastAPI app (sanitized)`
-`├─ usr/local/bin/`
-`│  ├─ vps-backups-b2.sh                # backup script`
-`│  └─ system-health.sh             # metrics helper(s)`
-`├─ etc/`
-`│  ├─ systemd/system/`
-`│  │  └─ vpsdash.service`
-`│  ├─ apache2/                     # vhost/reverse-proxy (sanitized)`
-`│  ├─ ufw/`
-`│  │  ├─ ufw.conf`
-`│  │  ├─ user.rules`
-`│  │  └─ user6.rules`
-`│  └─ wireguard/`
-`│     └─ wg0.conf`
-`└─ docs/`
+root/
+├─ var/
+│  ├─ www/                         # dashboard HTML/CSS (sanitized)
+│  ├─ log/                         # (optional) redacted samples
+│  └─ spool/                       # present for structure
+├─ opt/
+│  └─ vpsdash/                     # FastAPI app (sanitized)
+├─ usr/local/bin/
+│  ├─ vps-backups-b2.sh                # backup script
+│  └─ system-health.sh             # metrics helper(s)
+├─ etc/
+│  ├─ systemd/system/
+│  │  └─ vpsdash.service
+│  ├─ apache2/                     # vhost/reverse-proxy (sanitized)
+│  ├─ ufw/
+│  │  ├─ ufw.conf
+│  │  ├─ user.rules
+│  │  └─ user6.rules
+│  └─ wireguard/
+│     └─ wg0.conf
+└─ docs/
 
 Notes: file names/paths reflect the live server; some content is trimmed or redacted for safety.
 
