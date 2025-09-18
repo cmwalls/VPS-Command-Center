@@ -1,0 +1,22 @@
+[Unit]
+Description=VPS Dashboard API
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/vpsdash
+SupplementaryGroups=docker
+Environment="OWNCLOUD_LOG=/var/www/owncloud/data/owncloud.log"
+Environment="BACKUP_SUMMARY=/var/log/vps-backup.json"
+Environment="BACKUP_HISTORY=/var/log/vps-backup-history.jsonl"
+Environment="WIREGUARD_IFACE=wg0"
+Environment="MC_HOST=127.0.0.1"
+Environment="MC_PORT=19132"
+Environment="MC_CONTAINER=bedrock"
+ExecStart=/opt/vpsdash/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000
+sudoed it /etc/systemd/system/vpsdash.service
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

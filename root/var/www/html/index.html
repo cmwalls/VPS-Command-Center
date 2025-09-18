@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>VPS Command Center</title>
+  <style>
+    :root {
+      --bg: #0b0f14; --panel:#121821; --text:#e8f0ff; --muted:#9bb0c8; --accent:#4fb3ff; --good:#30d158; --warn:#ffd60a; --bad:#ff453a;
+      --card: #0f141b; --border:#1c2531;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin:0; font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--text); background: radial-gradient(1200px 800px at 60% -10%, #142033 0%, var(--bg) 60%);
+    }
+    header {
+      position: sticky; top:0; backdrop-filter: blur(8px);
+      background: linear-gradient(180deg, rgba(11,15,20,.9), rgba(11,15,20,.4));
+      border-bottom: 1px solid var(--border);
+      padding: 14px 18px; z-index: 10;
+      display:flex; align-items:center; gap:14px; justify-content: space-between;
+    }
+    .brand { font-weight:700; letter-spacing:.3px; }
+    .grid {
+      padding: 22px; display:grid; gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+    .card {
+      background: linear-gradient(180deg, var(--card), var(--panel));
+      border: 1px solid var(--border); border-radius: 14px; padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.02);
+    }
+    .card h2 { margin: 0 0 10px; font-size: 16px; letter-spacing:.2px; color: var(--muted); }
+    .kpi { display:flex; flex-wrap:wrap; gap:14px; margin-top:6px }
+    .pill { padding: 8px 10px; border:1px solid var(--border); border-radius: 10px; background:#0c1218; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .bar { height:10px; background:#0b1117; border:1px solid var(--border); border-radius: 6px; overflow:hidden }
+    .bar > span { display:block; height:100%; background: linear-gradient(90deg, var(--accent), #49ffa6); width:0% }
+    table { width:100%; border-collapse: collapse; }
+    th, td { text-align:left; padding:8px 6px; border-bottom:1px dashed #1d2733; font-size: 13px; }
+    th { color: var(--muted); font-weight:600; }
+    .status { font-weight:700 }
+    .good { color: var(--good) } .warn { color: var(--warn) } .bad { color: var(--bad) }
+    .muted { color: var(--muted) }
+    footer { padding: 16px 22px; color: var(--muted); border-top:1px solid var(--border) }
+    .fade { opacity:.85 }
+    .chip { border:1px solid var(--border); padding:4px 8px; border-radius:999px; background:#0c1218; color:var(--muted); }
+    .badge { padding:3px 8px; border-radius:999px; font-size:12px; font-weight:700; }
+    .badge.good { background: rgba(48,209,88,.15); border:1px solid rgba(48,209,88,.35); }
+    .badge.warn { background: rgba(255,214,10,.15); border:1px solid rgba(255,214,10,.35); }
+    .badge.bad  { background: rgba(255,69,58,.15);  border:1px solid rgba(255,69,58,.35); }
+    .tablewrap { max-height: 260px; overflow-y: auto; overflow-x: auto; }
+
+    #vpnPeers { table-layout: fixed; min-width: 640px; } /* gives columns predictable widths */
+    #vpnPeers th, #vpnPeers td { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+
+    #vpnPeers th:nth-child(1), #vpnPeers td:nth-child(1) { width: 150px; } /* Peer */
+    #vpnPeers th:nth-child(2), #vpnPeers td:nth-child(2) { width: 200px; } /* Endpoint */
+    #vpnPeers th.col-ips,  #vpnPeers td.col-ips  { width: 160px; }
+    #vpnPeers th.col-hs,   #vpnPeers td.col-hs   { width: 110px; }
+    #vpnPeers th.col-rx,   #vpnPeers td.col-rx   { width: 100px; }
+    #vpnPeers th.col-tx,   #vpnPeers td.col-tx   { width: 100px; }
+    #vpnPeers th.col-ka,   #vpnPeers td.col-ka   { width: 70px;  }
+
+    /* Responsive: hide least-important cols on smaller viewports */
+    @media (max-width: 1100px) {
+      #vpnPeers .col-ips, #vpnPeers .col-ka { display: none; }
+    }
+    @media (max-width: 900px) {
+      #vpnPeers .col-rx, #vpnPeers .col-tx { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="brand">VPS Command Center</div>
+      <div class="muted fade" id="hostname">—</div>
+    </div>
+    <div class="chip" id="timestamp">—</div>
+  </header>
+
+  <main class="grid">
+    <section class="card">
+      <h2>System Health</h2>
+      <div class="kpi">
+        <div class="pill">CPU: <b id="cpu">—</b></div>
+        <div class="pill">Load: <b id="load">—</b></div>
+        <div class="pill">RAM: <b id="ram">—</b></div>
+        <div class="pill">Uptime: <b id="uptime">—</b></div>
+        <div class="pill">Net: <span class="mono" id="net">—</span></div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="muted">CPU Utilization</div>
+        <div class="bar"><span id="cpuBar"></span></div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="muted">Memory Utilization</div>
+        <div class="bar"><span id="ramBar"></span></div>
+      </div>
+      <div style="margin-top:14px">
+        <table id="disks"><thead><tr><th>Mount</th><th>Used</th><th>Total</th><th>%</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>VPN</h2>
+      <div class="muted" id="vpnIfaceInfo"></div>
+      <div class="kpi">
+        <div class="pill">Type: <b id="vpnType">—</b></div>
+        <div class="pill">Status: <span class="status" id="vpnStatus">—</span></div>
+        <div class="pill">Peers: <b id="vpnPeerCount">—</b></div>
+      </div>
+
+      <div class="tablewrap">
+        <table id="vpnPeers">
+          <thead>
+            <tr>
+              <th>Peer</th><th>Endpoint</th><th class="col-ips">Allowed IPs</th>
+              <th class="col-hs">Handshake</th><th class="col-rx">RX</th><th class="col-tx">TX</th><th class="col-ka">KA</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>ownCloud — Recent</h2>
+      <table id="ocTable">
+        <thead><tr><th>Time</th><th>App</th><th>Level</th><th>Status</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Backups</h2>
+      <div class="kpi">
+        <div class="pill">Latest: <span id="bkStatus" class="status">—</span></div>
+        <div class="pill">Size: <b id="bkSize">—</b></div>
+        <div class="pill">Duration: <b id="bkDur">—</b></div>
+        <div class="pill">Dest: <span class="mono" id="bkDest">—</span></div>
+      </div>
+      <div style="margin-top:10px; max-height:260px; overflow:auto">
+        <table id="bkTable"><thead><tr><th>When</th><th>Status</th><th>Size</th><th>Duration</th><th>Dest</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Minecraft Server</h2>
+      <div class="kpi">
+        <div class="pill">Container: <span id="mcContainer">—</span></div>
+        <div class="pill">Status: <span id="mcStatus">—</span></div>
+        <div class="pill">Players: <span id="mcPlayers">—</span></div>
+      </div>
+      <div id="mcExtra" style="display:none; margin-top:10px">
+        <p><b>MOTD:</b> <span id="mcMOTD">—</span></p>
+        <p><b>Version:</b> <span id="mcVersion">—</span></p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <span class="muted">Auto-refresh: System 5s • VPN 10s • ownCloud 30s • Backups 30s • Minecraft 15s</span>
+  </footer>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const fmtBytes = (b) => {
+      const units = ['B','KB','MB','GB','TB','PB']; let i=0; while (b>=1024 && i<units.length-1){b/=1024;i++} return b.toFixed(1)+' '+units[i];
+    };
+    const fmtSecs = (s) => {
+      const d=Math.floor(s/86400), h=Math.floor((s%86400)/3600), m=Math.floor((s%3600)/60);
+      return `${d}d ${h}h ${m}m`;
+    };
+    const setStatusColor = (el, ok) => {
+      el.classList.remove('good','bad','warn');
+      el.classList.add(ok ? 'good' : 'bad');
+    };
+    const ago = (secs) => secs == null ? '—' : (secs<60? `${secs}s` : secs<3600? `${Math.floor(secs/60)}m` : `${Math.floor(secs/3600)}h`);
+    const maskKey = (k) => k ? `${k.slice(0,6)}…${k.slice(-6)}` : '—';
+
+    async function fetchJSON(path){ const r = await fetch(path, {cache:'no-store'}); return r.json(); }
+
+    async function loadMetrics(){
+      try{
+        const j = await fetchJSON('/api/metrics');
+        $('hostname').textContent = j.hostname || '—';
+        $('timestamp').textContent = new Date(j.time).toLocaleString();
+        $('cpu').textContent = j.cpu_percent.toFixed(1) + '%';
+        $('load').textContent = `${j.load["1"].toFixed(2)} / ${j.load["5"].toFixed(2)} / ${j.load["15"].toFixed(2)}`;
+        $('ram').textContent = `${((j.memory.used/j.memory.total)*100).toFixed(1)}%`;
+        $('uptime').textContent = fmtSecs(j.uptime_seconds);
+        $('net').textContent = `↑ ${fmtBytes(j.network.bytes_sent)}  ↓ ${fmtBytes(j.network.bytes_recv)}`;
+        $('cpuBar').style.width = j.cpu_percent + '%';
+        $('ramBar').style.width = ((j.memory.used/j.memory.total)*100) + '%';
+
+        const tb = document.querySelector('#disks tbody');
+        tb.innerHTML='';
+        (j.disks||[]).forEach(d=>{
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${d.mount}</td><td>${fmtBytes(d.used)}</td><td>${fmtBytes(d.total)}</td><td>${d.percent}%</td>`;
+          tb.appendChild(tr);
+        });
+      }catch(e){ console.error(e); }
+    }
+
+    async function loadVPN(){
+      try{
+        const j = await fetchJSON('/api/vpn');
+        if (j.interface) {
+          $('vpnIfaceInfo').textContent = `Listen: ${j.interface.listen_port || '—'} • PubKey: ${maskKey(j.interface.public_key||'')}`;
+        }
+        $('vpnType').textContent = j.type || '—';
+        $('vpnStatus').textContent = j.running ? 'Connected' : 'Disconnected';
+        setStatusColor($('vpnStatus'), !!j.running);
+
+        const peers = j.peers || [];
+        $('vpnPeerCount').textContent = peers.length;
+
+        const tb = document.querySelector('#vpnPeers tbody');
+        tb.innerHTML='';
+        peers.forEach(p=>{
+          const tr = document.createElement('tr');
+          const hsText = p.handshake_age_sec==null ? '—' : `${ago(p.handshake_age_sec)} ago`;
+          tr.innerHTML = `
+            <td class="mono" title="${p.peer}">${maskKey(p.peer)}</td>
+            <td>${p.endpoint || '—'}</td>
+            <td class="mono col-ips">${p.allowed_ips || '—'}</td>
+            <td class="col-hs">${hsText}</td>
+            <td class="col-rx">${fmtBytes(p.transfer_rx || 0)}</td>
+            <td class="col-tx">${fmtBytes(p.transfer_tx || 0)}</td>
+            <td class="col-ka">${p.persistent_keepalive ? (p.persistent_keepalive + 's') : '—'}</td>
+          `;
+          tb.appendChild(tr);
+        });
+      }catch(e){ console.error(e); }
+    }
+
+    async function loadOwnCloud(){
+      try{
+        const j = await fetchJSON('/api/owncloud/recent');
+        const tb = document.querySelector('#ocTable tbody');
+        tb.innerHTML='';
+        const toBadge = (lvl) => {
+          const n = parseInt(lvl, 10);
+          if (isNaN(n)) return {txt:'Info', cls:'good'};
+          if (n >= 3)   return {txt:'Fail', cls:'bad'};
+          if (n === 2)  return {txt:'Warn', cls:'warn'};
+          return {txt:'Success', cls:'good'};
+        };
+        (j.events||[]).slice(-5).reverse().forEach(ev=>{
+          const b = toBadge(ev.level);
+          const tr = document.createElement('tr');
+          const msg = (ev.message||'').toString();
+          tr.innerHTML = `
+            <td>${ev.time||''}</td>
+            <td>${ev.app||''}</td>
+            <td>${ev.level||''}</td>
+            <td title="${msg.replace(/"/g,'&quot;')}">
+              <span class="badge ${b.cls}">${b.txt}</span>
+            </td>`;
+          tb.appendChild(tr);
+        });
+      }catch(e){ console.error(e); }
+    }
+
+    async function loadBackups(){
+      try{
+        const j = await fetchJSON('/api/backups/summary');
+        const l = j.latest || {};
+        $('bkStatus').textContent = l.status || '—';
+        setStatusColor($('bkStatus'), l.status === 'success');
+        $('bkSize').textContent = l.size ? fmtBytes(l.size): '—';
+        $('bkDur').textContent = l.duration ? (l.duration.toFixed ? l.duration.toFixed(1): l.duration) + 's' : '—';
+        $('bkDest').textContent = l.destination || '—';
+
+        const tb = document.querySelector('#bkTable tbody'); tb.innerHTML='';
+        (j.recent||[]).slice(-5).reverse().forEach(it=>{
+          const when = it.end_time || it.start_time || it.time || '';
+          const st = it.status || 'unknown';
+          const sz = it.size ? fmtBytes(it.size) : '—';
+          const du = it.duration ? (it.duration.toFixed ? it.duration.toFixed(1): it.duration) + 's' : '—';
+          const de = it.destination || (it.dest || '—');
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${when}</td><td class="${st==='success'?'good':'bad'}">${st}</td><td>${sz}</td><td>${du}</td><td class="mono">${de}</td>`;
+          tb.appendChild(tr);
+        });
+      }catch(e){ console.error(e); }
+    }
+
+    async function loadMinecraft(){
+      try {
+        const j = await fetchJSON('/api/minecraft');
+        const container = $('mcContainer');
+        const status = $('mcStatus');
+        const players = $('mcPlayers');
+        const extra = $('mcExtra');
+        const motd = $('mcMOTD');
+        const version = $('mcVersion');
+        
+        // Container status
+        container.textContent = j.container || 'unknown';
+
+        // Server info
+        if(j.server && j.server.online){
+          status.textContent = "Online";
+          status.style.color = "lime";
+          motd.textContent = j.server.motd || "—";
+          version.textContent = j.server.version || "—";
+          players.textContent = `${j.server.player_count}/${j.server.max_players}`;
+
+          extra.style.display='block';
+        } else {
+          status.textContent = "Offline";
+          status.style.color = "red";
+          players.textContent = "0/0";
+          extra.style.display='none';
+        }
+      } catch(e){
+        console.error("Minecraft fetch error", e);
+      }
+    }
+
+    // initial + intervals
+    loadMetrics(); loadVPN(); loadOwnCloud(); loadBackups(); loadMinecraft();
+    setInterval(loadMetrics, 5000);
+    setInterval(loadVPN, 10000);
+    setInterval(loadOwnCloud, 30000);
+    setInterval(loadBackups, 30000);
+    setInterval(loadMinecraft, 15000);
+  </script>
+</body>
+</html>

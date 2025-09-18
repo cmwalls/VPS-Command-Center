@@ -1,0 +1,87 @@
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.python-version
+
+# --- Python / tooling ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.sqlite3
+*.sqlite
+*.db
+
+# --- Front-end (if added later) ---
+node_modules/
+dist/
+build/
+
+# --- Archives / dumps / backups / logs ---
+*.log
+logs/
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+backups/
+dump.sql
+dump/*.sql
+
+# --- Never commit real certs/keys or private dirs ---
+root/etc/letsencrypt/
+root/etc/ssl/private/
+root/home/*/.ssh/
+root/root/.ssh/
+*.key
+*.pem
+*.crt
+*.csr
+*.p12
+*.jks
+*.kubeconfig
+*.ovpn
+id_rsa*
+id_ed25519*
+*.wg
+
+# --- Env / secrets by convention ---
+root/**/.env
+root/**/.secrets
+root/etc/**.env
+root/etc/**.secrets
+secrets.*
+*.conf.real
+
+# --- WireGuard: ignore real configs; keep sanitized examples ---
+root/etc/wireguard/*.conf
+!root/etc/wireguard/*.conf.example
+
+# --- UFW: ignore real rule files; keep examples ---
+root/etc/ufw/user.rules
+root/etc/ufw/user6.rules
+!root/etc/ufw/*.example
+
+# --- System state you don’t want mirrored verbatim ---
+root/var/log/
+root/var/lib/
+root/var/cache/
+# user crontabs are private
+root/var/spool/cron/crontabs/
+
+# --- Local staging artifacts ---
+MANIFEST.txt

@@ -1,0 +1,141 @@
+#!/bin/bash
+set -euo pipefail
+
+# Ensure cron finds commands
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# ====== USER SETTINGS ======
+MAIL_TO="email@address"         # where to send the report
+DEST_REMOTE="b2crypt:daily/"           # rclone remote target
+SRC="/etc /var/www /home"              # folders to include
+TMP="/tmp"
+LOG="/var/log/vps-backup.log"
+
+# ====== DASHBOARD FILES ======
+SUMMARY="/var/log/vps-backup.json"
+HISTORY="/var/log/vps-backup-history.jsonl"
+
+# Track run status & timestamps for dashboard JSON
+START_ISO="$(date -Is)"
+START_EPOCH="$(date +%s)"
+STATUS="failed"                         # flip to success after upload
+ARCHIVE_BYTES=0
+
+# ====== COLORS FOR TTY (ignored in email) ======
+GREEN="\e[32m"; YELLOW="\e[33m"; RED="\e[31m"; RESET="\e[0m"
+
+# ====== HELPERS ======
+hr() { printf '%*s\n' 60 | tr ' ' '-'; }
+hbytes() { numfmt --to=iec --suffix=B --format="%.2f" "$1"; }
+
+send_mail() {  # $1 subject, $2 body
+  printf "%s\n" "$2" | mail -a "Content-Type: text/plain; charset=UTF-8" -s "$1" "$MAIL_TO"
+}
+
+# ---- ALWAYS write JSON (success or fail) ----
+write_json() {
+  local end_iso end_epoch duration sz
+  end_iso="$(date -Is)"
+  end_epoch="$(date +%s)"
+  duration=$(( end_epoch - START_EPOCH ))
+
+  sz=$ARCHIVE_BYTES
+  [ -n "${OUT:-}" ] && [ -f "$OUT" ] && sz=$(stat -c%s "$OUT" 2>/dev/null || echo "$ARCHIVE_BYTES")
+
+  printf '{"start_time":"%s","end_time":"%s","status":"%s","destination":"%s","size":%s,"duration":%s}\n' \
+         "$START_ISO" "$end_iso" "$STATUS" "$DEST_REMOTE" "$sz" "$duration" > "$SUMMARY"
+
+  printf '{"start_time":"%s","end_time":"%s","status":"%s","destination":"%s","size":%s,"duration":%s}\n' \
+         "$START_ISO" "$end_iso" "$STATUS" "$DEST_REMOTE" "$sz" "$duration" >> "$HISTORY"
+
+  chgrp www-data "$SUMMARY" "$HISTORY" 2>/dev/null || true
+  chmod 640 "$SUMMARY" "$HISTORY" 2>/dev/null || true
+}
+trap write_json EXIT   # <-- important
+
+on_error() {
+  local msg="❌ Backup FAILED on $(hostname)
+$(hr)
+Started:  $START_HUMAN
+Step:     $CURRENT_STEP
+Error:    $(tail -n 20 "$LOG" 2>/dev/null || echo 'see journal')
+$(hr)
+"
+  echo -e "$msg"
+  send_mail "[VPS Backup] FAILED on $(hostname)" "$msg" || true
+}
+trap on_error ERR
+
+# ====== START ======
+START_HUMAN="$(date '+%F %T')"
+DATE=$(date +%F_%H-%M)
+OUT="$TMP/vps-backup-$DATE.tar.gz"
+
+exec > >(tee -a "$LOG") 2>&1
+echo -e "\n${YELLOW}=== VPS BACKUP STARTED @ $START_HUMAN ===${RESET}"
+echo "Host: $(hostname)   Remote: $DEST_REMOTE"
+
+# ---- Estimate size for progress (best-effort) ----
+CURRENT_STEP="estimating size"
+EST_BYTES=$(du -sb $SRC 2>/dev/null | awk '{s+=$1} END{print s+0}')
+echo "Estimated source size: $(hbytes ${EST_BYTES:-0})"
+
+# ---- Compression with/without pv ----
+CURRENT_STEP="compression"
+echo "Compressing…"
+if command -v pv >/dev/null && [ "${EST_BYTES:-0}" -gt 0 ]; then
+  tar -czf - $SRC | pv -s "$EST_BYTES" > "$OUT"
+else
+  tar -czf "$OUT" $SRC
+fi
+ARCHIVE_BYTES=$(stat -c%s "$OUT")
+echo "Archive created: $OUT ($(hbytes $ARCHIVE_BYTES))"
+
+# ---- Upload ----
+CURRENT_STEP="upload"
+echo "Uploading to remote ($DEST_REMOTE)…"
+rclone copy "$OUT" "$DEST_REMOTE" --progress --stats=15s
+STATUS="success"
+
+# ---- Retention (keep last 14 by name) ----
+CURRENT_STEP="retention"
+echo "Applying retention (keep last 14)…"
+rclone lsf --format "p" --dir-slash=false "$DEST_REMOTE" \
+  | sort -r \
+  | awk 'NR>14{print}' \
+  | sed "s#^#$DEST_REMOTE#" \
+  | xargs -r -n1 rclone delete
+
+# ---- Remote size summary (optional) ----
+CURRENT_STEP="sizing remote"
+REMOTE_SIZE_RAW=$(rclone size "$DEST_REMOTE" --json | awk -F[:,] '/bytes/{print $2; exit}' | tr -d ' ')
+REMOTE_SIZE_HUMAN=$(hbytes ${REMOTE_SIZE_RAW:-0})
+
+# ---- Cleanup ----
+CURRENT_STEP="cleanup"
+rm -f "$OUT"
+
+# ---- Human summary + email ----
+END_HUMAN="$(date '+%F %T')"
+DURATION=$(( $(date +%s) - START_EPOCH ))
+SUMMARY_TXT="$(cat <<EOF
+✅ Backup SUCCESS on $(hostname)
+------------------------------------------------------------
+Started:     $START_HUMAN
+Finished:    $END_HUMAN
+Duration:    ${DURATION}s
+Archive:     $(basename "$OUT")
+Size:        $(hbytes $ARCHIVE_BYTES)
+Remote:      $DEST_REMOTE
+Remote used: ${REMOTE_SIZE_HUMAN}
+
+Included paths:
+$SRC
+------------------------------------------------------------
+Log tail:
+$(tail -n 20 "$LOG")
+EOF
+)"
+echo -e "${GREEN}=== BACKUP SUCCESS ===${RESET}"
+echo "$SUMMARY_TXT"
+send_mail "[VPS Backup] Success on $(hostname)" "$SUMMARY_TXT"
